@@ -1,0 +1,47 @@
+NAME
+    `Tickit::Widget::SegmentDisplay' - show a single character like a
+    segmented display
+
+DESCRIPTION
+    This class provides a widget that immitates a segmented LED or LCD
+    display. It shows a single character by lighting or shading fixed
+    rectangular bars.
+
+STYLE
+    The default style pen is used as the widget pen, though only the
+    background colour will actually matter as the widget does not directly
+    display text.
+
+    The following style keys are used:
+
+    lit => COLOUR
+    unlit => COLOUR
+        Colour descriptions (index or name) for the lit and unlight segments
+        of the display.
+
+CONSTRUCTOR
+  $segmentdisplay = Tickit::Widget::SegmentDisplay->new( %args )
+    Constructs a new `Tickit::Widget::SegmentDisplay' object.
+
+    Takes the following named arguments
+
+    value => STR
+            Sets an initial value.
+
+    type => STR
+            The type of display. Supported types are:
+
+            seven
+                A 7-segment bar display
+
+            colon
+                A static `:'
+
+ACCESSORS
+  $value = $segmentdisplay->value
+  $segmentdisplay->set_value( $value )
+    Return or set the character on display
+
+AUTHOR
+    Paul Evans <leonerd@leonerd.org.uk>
+
