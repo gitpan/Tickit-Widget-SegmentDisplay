@@ -10,9 +10,8 @@ use warnings;
 use 5.010; # //
 use base qw( Tickit::Widget );
 use Tickit::Style;
-use Tickit::RenderContext;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use Carp;
 
@@ -118,7 +117,7 @@ sub new
    }
    defined $method or croak "Unrecognised type name '$type'";
 
-   $self->{render_method} = $self->can( "render_${method}_to_rc" );
+   $self->{render_method} = $self->can( "render_${method}_to_rb" );
 
    $self->{value} = $args{value} // "";
 
@@ -214,58 +213,48 @@ sub reshape
    $self->{D_line} = $top + $lines - 1;
 }
 
-use constant CLEAR_BEFORE_RENDER => 0;
-sub render
+sub render_to_rb
 {
    my $self = shift;
-   my %args = @_;
-   my $rect = $args{rect};
-   my $win = $self->window or return;
-   $win->is_visible or return;
+   my ( $rb, $rect ) = @_;
 
-   my $rc = Tickit::RenderContext->new( lines => $win->lines, cols => $win->cols );
-   $rc->clip( $rect );
-   $rc->setpen( $self->pen );
+   $rb->eraserect( $rect );
 
-   $rc->erase_at( $_, $rect->left, $rect->cols ) for $rect->linerange;
-
-   $self->{render_method}->( $self, $rc, $rect );
-
-   $rc->flush_to_window( $win );
+   $self->{render_method}->( $self, $rb, $rect );
 }
 
 # 7-Segment
-sub render_seven_to_rc
+sub render_seven_to_rb
 {
    my $self = shift;
-   my ( $rc ) = @_;
+   my ( $rb ) = @_;
 
-   $rc->erase_at( $self->{A_line}, $self->{AGD_col}, $self->{AGD_width}, $self->_pen_for_seg( "A" ) );
-   $rc->erase_at( $self->{G_line}, $self->{AGD_col}, $self->{AGD_width}, $self->_pen_for_seg( "G" ) );
-   $rc->erase_at( $self->{D_line}, $self->{AGD_col}, $self->{AGD_width}, $self->_pen_for_seg( "D" ) );
+   $rb->erase_at( $self->{A_line}, $self->{AGD_col}, $self->{AGD_width}, $self->_pen_for_seg( "A" ) );
+   $rb->erase_at( $self->{G_line}, $self->{AGD_col}, $self->{AGD_width}, $self->_pen_for_seg( "G" ) );
+   $rb->erase_at( $self->{D_line}, $self->{AGD_col}, $self->{AGD_width}, $self->_pen_for_seg( "D" ) );
 
    my ( $F_pen, $B_pen ) = ( $self->_pen_for_seg( "F" ), $self->_pen_for_seg( "B" ) );
    foreach my $line ( $self->{A_line}+1 .. $self->{G_line}-1 ) {
-      $rc->erase_at( $line, $self->{FE_col}, 2, $F_pen );
-      $rc->erase_at( $line, $self->{BC_col}, 2, $B_pen );
+      $rb->erase_at( $line, $self->{FE_col}, 2, $F_pen );
+      $rb->erase_at( $line, $self->{BC_col}, 2, $B_pen );
    }
 
    my ( $E_pen, $C_pen ) = ( $self->_pen_for_seg( "E" ), $self->_pen_for_seg( "C" ) );
    foreach my $line ( $self->{G_line}+1 .. $self->{D_line}-1 ) {
-      $rc->erase_at( $line, $self->{FE_col}, 2, $E_pen );
-      $rc->erase_at( $line, $self->{BC_col}, 2, $C_pen );
+      $rb->erase_at( $line, $self->{FE_col}, 2, $E_pen );
+      $rb->erase_at( $line, $self->{BC_col}, 2, $C_pen );
    }
 }
 
 # Static double-dot colon
-sub render_colon_to_rc
+sub render_colon_to_rb
 {
    my $self = shift;
-   my ( $rc ) = @_;
+   my ( $rb ) = @_;
 
    my $col = 2 + int( $self->{AGD_width} / 2 );
-   $rc->erase_at( int( ($self->{A_line} + $self->{G_line}) / 2 ), $col, 2, $self->{lit_pen} );
-   $rc->erase_at( int( ($self->{G_line} + $self->{D_line}) / 2 ), $col, 2, $self->{lit_pen} );
+   $rb->erase_at( int( ($self->{A_line} + $self->{G_line}) / 2 ), $col, 2, $self->{lit_pen} );
+   $rb->erase_at( int( ($self->{G_line} + $self->{D_line}) / 2 ), $col, 2, $self->{lit_pen} );
 }
 
 =head1 AUTHOR

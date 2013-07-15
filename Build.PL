@@ -6,9 +6,8 @@ use Module::Build;
 my $build = Module::Build->new(
    module_name => 'Tickit::Widget::SegmentDisplay',
    requires => {
-      'Tickit::RenderContext' => '0.07',
       'Tickit::Test' => '0.12',
-      'Tickit::Widget' => '0.32',
+      'Tickit::Widget' => '0.36',
    },
    build_requires => {
       'Test::More' => '0.88', # done_testing

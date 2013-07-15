@@ -1,4 +1,7 @@
 Revision history for Tickit-Widget-SegmentDisplay
 
+0.02    CHANGES:
+         * Updated for Tickit 0.36 - use RenderBuffer and ->render_to_rb
+
 0.01    First version, released on an unsuspecting world.
 
