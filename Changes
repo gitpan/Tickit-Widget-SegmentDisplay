@@ -1,5 +1,11 @@
 Revision history for Tickit-Widget-SegmentDisplay
 
+0.03    2014/10/19 18:36:52
+        [CHANGES]
+         * Allow seven segments with decimal point
+         * Added support for displaying some 'symbol' markers; useful
+           electronics units
+
 0.02    CHANGES:
          * Updated for Tickit 0.36 - use RenderBuffer and ->render_to_rb
 

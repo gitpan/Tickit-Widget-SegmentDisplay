@@ -1,7 +1,7 @@
 #  You may distribute under the terms of either the GNU General Public License
 #  or the Artistic License (the same terms as Perl itself)
 #
-#  (C) Paul Evans, 2013 -- leonerd@leonerd.org.uk
+#  (C) Paul Evans, 2013-2014 -- leonerd@leonerd.org.uk
 
 package Tickit::Widget::SegmentDisplay;
 
@@ -11,7 +11,9 @@ use 5.010; # //
 use base qw( Tickit::Widget );
 use Tickit::Style;
 
-our $VERSION = '0.02';
+use utf8;
+
+our $VERSION = '0.03';
 
 use Carp;
 
@@ -26,6 +28,8 @@ use Carp;
 #
 # B,C,E,F == 2cols wide
 # A,D,G   == 1line tall
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -88,9 +92,25 @@ The type of display. Supported types are:
 
 A 7-segment bar display
 
+=item seven_dp
+
+A 7-segment bar display with decimal-point. To light the decimal point, append
+the value with ".".
+
 =item colon
 
 A static C<:>
+
+=item symb
+
+A unit or prefix symbol character. The following characters are recognised
+
+  V A W Ω
+  M k m µ
+
+Each will be drawn in a style approximately to fit the general LED shape
+display, by drawing lines of erased cells. Note however that some more
+intricate shapes may not be very visible on smaller scales.
 
 =back
 
@@ -99,8 +119,10 @@ A static C<:>
 =cut
 
 my %types = (
-   seven => [qw( 7 )],
-   colon => [qw( : )],
+   seven    => [qw( 7 )],
+   seven_dp => [qw( 7. )],
+   colon    => [qw( : )],
+   symb     => [],
 );
 
 sub new
@@ -117,7 +139,8 @@ sub new
    }
    defined $method or croak "Unrecognised type name '$type'";
 
-   $self->{render_method} = $self->can( "render_${method}_to_rb" );
+   $self->{reshape_method} = $self->can( "reshape_${method}" );
+   $self->{render_method}  = $self->can( "render_${method}_to_rb" );
 
    $self->{value} = $args{value} // "";
 
@@ -169,6 +192,25 @@ sub on_style_changed_values
    $self->{unlit_pen} = Tickit::Pen::Immutable->new( bg => $values{unlit}[1] ) if $values{unlit};
 }
 
+sub reshape
+{
+   my $self = shift;
+   my $win = $self->window or return;
+
+   $self->{reshape_method}->( $self, $win->lines, $win->cols, 0, 0 );
+}
+
+sub render_to_rb
+{
+   my $self = shift;
+   my ( $rb, $rect ) = @_;
+
+   $rb->eraserect( $rect );
+
+   $self->{render_method}->( $self, $rb, $rect );
+}
+
+# 7-Segment
 my %segments = (
    0 => "ABCDEF ",
    1 => " BC    ",
@@ -193,14 +235,10 @@ sub _pen_for_seg
    return $lit ? $self->{lit_pen} : $self->{unlit_pen};
 }
 
-sub reshape
+sub reshape_seven
 {
    my $self = shift;
-   my $win = $self->window or return;
-
-   my $lines = $win->lines;
-   my $cols  = $win->cols;
-   my ( $top, $left ) = ( 0, 0 );
+   my ( $lines, $cols, $top, $left ) = @_;
 
    $self->{AGD_col}   = $left + 2;
    $self->{AGD_width} = $cols - 4;
@@ -213,17 +251,6 @@ sub reshape
    $self->{D_line} = $top + $lines - 1;
 }
 
-sub render_to_rb
-{
-   my $self = shift;
-   my ( $rb, $rect ) = @_;
-
-   $rb->eraserect( $rect );
-
-   $self->{render_method}->( $self, $rb, $rect );
-}
-
-# 7-Segment
 sub render_seven_to_rb
 {
    my $self = shift;
@@ -246,15 +273,181 @@ sub render_seven_to_rb
    }
 }
 
+# 7-Segment with DP
+sub reshape_seven_dp
+{
+   my $self = shift;
+   my ( $lines, $cols, $top, $left ) = @_;
+
+   $self->reshape_seven( $lines, $cols - 2, $top, $left );
+
+   $self->{DP_line} = $top  + $lines - 1;
+   $self->{DP_col}  = $left + $cols  - 2;
+}
+
+sub render_seven_dp_to_rb
+{
+   my $self = shift;
+   my ( $rb ) = @_;
+
+   my $value = $self->{value};
+   my $dp;
+   local $self->{value};
+
+   if( $value =~ m/^(\d?)(\.?)/ ) {
+      $self->{value} = $1;
+      $dp = length $2;
+   }
+   else {
+      $self->{value} = $value;
+   }
+
+   $self->render_seven_to_rb( $rb );
+
+   my $dp_pen = $dp ? $self->{lit_pen} : $self->{unlit_pen};
+   $rb->erase_at( $self->{DP_line}, $self->{DP_col}, 2, $dp_pen );
+}
+
 # Static double-dot colon
+sub reshape_colon
+{
+   my $self = shift;
+   my ( $lines, $cols, $top, $left ) = @_;
+   my $bottom = $top + $lines - 1;
+
+   $self->{colon_col} = 2 + int( ( $cols - 4 ) / 2 );
+
+   my $ofs = int( ( $lines - 1 + 0.5 ) / 4 );
+
+   $self->{A_line} = $top    + $ofs;
+   $self->{B_line} = $bottom - $ofs;
+}
+
 sub render_colon_to_rb
 {
    my $self = shift;
    my ( $rb ) = @_;
 
-   my $col = 2 + int( $self->{AGD_width} / 2 );
-   $rb->erase_at( int( ($self->{A_line} + $self->{G_line}) / 2 ), $col, 2, $self->{lit_pen} );
-   $rb->erase_at( int( ($self->{G_line} + $self->{D_line}) / 2 ), $col, 2, $self->{lit_pen} );
+   my $col = $self->{colon_col};
+   $rb->erase_at( $self->{A_line}, $col, 2, $self->{lit_pen} );
+   $rb->erase_at( $self->{B_line}, $col, 2, $self->{lit_pen} );
+}
+
+# Symbol drawing
+#
+# Each symbol is drawn as a series of erase calls on the RB to draw 'lines'.
+
+my %symbol_strokes = do {
+   no warnings 'qw'; # Quiet the 'Possible attempt to separate words with commas' warning
+
+   # Letters likely to be used for units
+   V => [ [qw( 0,0 50,100 100,0 )] ],
+   A => [ [qw( 0,100 50,0 100,100 )], [qw( 20,70 80,70)] ],
+   W => [ [qw( 0,0 25,100 50,50 75,100 100,0)] ],
+   Ω => [ [qw( 0,100 25,100 25,75 10,60 0,50 0,20 20,0 80,0 100,20 100,50 90,60 75,75 75,100 100,100 ) ] ],
+
+   # Symbols likely to be used as SI prefixes
+   M => [ [qw( 0,100 0,0 50,50 100,0 100,100 )] ],
+   k => [ [qw( 10,0 10,100 )], [qw( 90,40 10,70 90,100 )] ],
+   m => [ [qw( 0,100 0,50 )], [qw( 10,40 40,40 )], [qw( 50,50 50,100 )], [qw( 60,40 90,40 )], [qw( 90,50 100,100 )] ],
+   µ => [ [qw( 0,100 0,40 )], [qw( 0,80 70,80 80,75 90,60 100,40 )] ],
+};
+
+sub reshape_symb
+{
+   my $self = shift;
+   my ( $lines, $cols, $top, $left ) = @_;
+
+   $self->{mid_line} = int( ( $lines - 1 ) / 2 );
+   $self->{mid_col}  = int( ( $cols  - 2 ) / 2 );
+
+   $self->{Y_to_line} = ( $lines - 1 ) / 100;
+   $self->{X_to_col}  = ( $cols  - 2 ) / 100;
+}
+
+sub _roundpos
+{
+   my $self = shift;
+   my ( $l, $c ) = @_;
+
+   # Round away from the centre of the widget
+   return
+      int($l) + ( $l > int($l) && $l > $self->{mid_line} ),
+      int($c) + ( $c > int($c) && $c > $self->{mid_col}  );
+}
+
+sub render_symb_to_rb
+{
+   my $self = shift;
+   my ( $rb ) = @_;
+
+   my $strokes = $symbol_strokes{$self->value} or return;
+
+   $rb->setpen( $self->{lit_pen} );
+
+   my $Y_to_line = $self->{Y_to_line};
+   my $X_to_col  = $self->{X_to_col};
+
+   foreach my $stroke ( @$strokes ) {
+      my ( $start, @points ) = @$stroke;
+      $start =~ m/^(\d+),(\d+)$/;
+      my ( $atL, $atC ) = $self->_roundpos( $2 * $Y_to_line, $1 * $X_to_col );
+
+      foreach ( @points ) {
+         m/^(\d+),(\d+)$/;
+         my ( $toL, $toC ) = $self->_roundpos( $2 * $Y_to_line, $1 * $X_to_col );
+
+         if( $toL == $atL ) {
+            my ( $c, $limC ) = $toC > $atC ? ( $atC, $toC ) : ( $toC, $atC );
+            $rb->erase_at( $atL, $c, $limC - $c + 2 );
+         }
+         elsif( $toC == $atC ) {
+            my ( $l, $limL ) = $toL > $atL ? ( $atL, $toL ) : ( $toL, $atL );
+            $rb->erase_at( $_, $atC, 2 ) for $l .. $limL;
+         }
+         else {
+            my ( $sL, $eL, $sC, $eC ) = $toL > $atL ? ( $atL, $toL, $atC, $toC )
+                                                    : ( $toL, $atL, $toC, $atC );
+            # Maths is all easier if we use exclusive coords.
+            $eL++;
+            $eC > $sC ? $eC++ : $eC--;
+
+            my $dL = $eL - $sL;
+            my $dC = $eC - $sC;
+
+            if( $dL >= abs $dC ) {
+               my $c = $sC;
+               my $err = 0;
+
+               for( my $l = $sL; $l != $eL; $l++ ) {
+                  $c++, $err -= $dL if  $err > $dL;
+                  $c--, $err += $dL if -$err > $dL;
+
+                  $rb->erase_at( $l, $c, 2 );
+
+                  $err += $dC;
+               }
+            }
+            else {
+               my $l = $sL;
+               my $err = 0;
+               my $adC = abs $dC;
+
+               for( my $c = $sC; $c != $eC; $c += ( $eC > $sC ) ? 1 : -1 ) {
+                  $l++, $err -= $adC if  $err > $adC;
+                  $l--, $err += $adC if -$err > $adC;
+
+                  $rb->erase_at( $l, $c, 2 );
+
+                  $err += $dL;
+               }
+            }
+         }
+
+         $atL = $toL;
+         $atC = $toC;
+      }
+   }
 }
 
 =head1 AUTHOR

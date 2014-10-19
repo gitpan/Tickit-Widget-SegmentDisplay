@@ -34,8 +34,24 @@ CONSTRUCTOR
             seven
                 A 7-segment bar display
 
+            seven_dp
+                A 7-segment bar display with decimal-point. To light the
+                decimal point, append the value with ".".
+
             colon
                 A static `:'
+
+            symb
+                A unit or prefix symbol character. The following characters
+                are recognised
+
+                  V A W Ω
+                  M k m µ
+
+                Each will be drawn in a style approximately to fit the
+                general LED shape display, by drawing lines of erased cells.
+                Note however that some more intricate shapes may not be very
+                visible on smaller scales.
 
 ACCESSORS
   $value = $segmentdisplay->value
